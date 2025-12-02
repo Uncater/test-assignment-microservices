@@ -1,0 +1,6 @@
+imports:
+    # Import shared bundle test services
+    - resource: '../order-bundle/config/services_test.php'
+
+services:
+    # Additional test-specific services can be added here if needed

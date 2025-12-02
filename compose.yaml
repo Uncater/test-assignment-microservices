@@ -1,0 +1,81 @@
+services:
+  order-service:
+    restart: unless-stopped
+    environment:
+      SERVER_NAME: 'http://order-service'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - 81:80
+
+  product-service:
+    restart: unless-stopped
+    environment:
+      SERVER_NAME: 'http://product-service'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - 82:80
+
+  order-database:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: 'app'
+      POSTGRES_PASSWORD: 'pass'
+      POSTGRES_USER: 'app'
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - order_database_data:/var/lib/postgresql/data:rw
+
+  product-database:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: 'app'
+      POSTGRES_PASSWORD: 'pass'
+      POSTGRES_USER: 'app'
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - product_database_data:/var/lib/postgresql/data:rw
+
+  rabbitmq:
+    image: rabbitmq:latest
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: pass
+    configs:
+      - source: rabbitmq-plugins
+        target: /etc/rabbitmq/enabled_plugins
+    volumes:
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+
+configs:
+  rabbitmq-plugins:
+    content: "[rabbitmq_management]."
+
+volumes:
+  caddy_data:
+  caddy_config:
+  product_database_data:
+  order_database_data:
+  rabbitmq-lib:
+    driver: local
+  rabbitmq-log:
+    driver: local

@@ -1,0 +1,548 @@
+openapi: 3.0.3
+info:
+  title: Order Service API
+  description: |
+    Microservice for managing orders in a distributed e-commerce system.
+    
+    This service provides order management operations and integrates with the Product Service
+    to validate product availability and manage stock levels during order creation.
+    
+    ## Architecture
+    - Built with Symfony 6.4 and Clean Architecture principles
+    - Uses PostgreSQL for data persistence
+    - Communicates with Product Service via HTTP for product validation
+    - Implements Domain-Driven Design patterns with proper separation of concerns
+    
+  version: 1.0.0
+  contact:
+    name: Order Service Team
+    email: order-team@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8081
+    description: Local development server
+  - url: https://api.example.com/order-service
+    description: Production server
+
+tags:
+  - name: orders
+    description: Order management operations
+  - name: health
+    description: Service health monitoring
+
+paths:
+  /orders:
+    get:
+      tags:
+        - orders
+      summary: List orders
+      description: |
+        Retrieve a paginated list of all orders with enriched product information.
+        
+        Each order includes the associated product details fetched from the Product Service,
+        providing a complete view of the order with current product information.
+      operationId: listOrders
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-based)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Successful response with paginated order list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+              examples:
+                empty_list:
+                  summary: Empty order list
+                  value:
+                    data: []
+                    meta:
+                      page: 1
+                      limit: 10
+                      total: 0
+                      pages: 1
+                with_orders:
+                  summary: List with orders
+                  value:
+                    data:
+                      - orderId: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+                        product:
+                          id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                          name: "Wireless Headphones"
+                          price: 99.99
+                          quantity: 8
+                        customerName: "John Doe"
+                        quantityOrdered: 2
+                        orderStatus: "Processing"
+                      - orderId: "019abbfa-1234-785e-af09-216a4f84d0bd"
+                        product:
+                          id: "019abba1-3d42-711d-b1ff-f137a40e0540"
+                          name: "Bluetooth Speaker"
+                          price: 79.99
+                          quantity: 15
+                        customerName: "Jane Smith"
+                        quantityOrdered: 1
+                        orderStatus: "Processing"
+                    meta:
+                      page: 1
+                      limit: 10
+                      total: 2
+                      pages: 1
+        '400':
+          description: Bad request - invalid pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Invalid pagination parameters"
+
+  /order:
+    post:
+      tags:
+        - orders
+      summary: Create order
+      description: |
+        Create a new order in the system with product validation and stock management.
+        
+        The service validates that the specified product exists and has sufficient stock
+        before creating the order. Upon successful creation, the product quantity is
+        automatically decremented to reflect the reserved stock.
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            examples:
+              new_order:
+                summary: Create new order
+                value:
+                  data:
+                    productId: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                    customerName: "John Doe"
+                    quantityOrdered: 2
+              custom_order_id:
+                summary: Create order with custom ID
+                value:
+                  data:
+                    orderId: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+                    productId: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                    customerName: "Jane Smith"
+                    quantityOrdered: 1
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+              example:
+                data:
+                  orderId: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+                  product:
+                    id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                    name: "Wireless Headphones"
+                    price: 99.99
+                    quantity: 8
+                  customerName: "John Doe"
+                  quantityOrdered: 2
+                  orderStatus: "Processing"
+                meta: []
+        '400':
+          description: Bad request - invalid order data or insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_customer:
+                  summary: Missing customer name
+                  value:
+                    data: null
+                    meta:
+                      error: "Customer name is required"
+                invalid_quantity:
+                  summary: Invalid quantity
+                  value:
+                    data: null
+                    meta:
+                      error: "Quantity ordered must be greater than 0"
+                insufficient_stock:
+                  summary: Insufficient stock
+                  value:
+                    data: null
+                    meta:
+                      error: "Insufficient stock available"
+                invalid_input:
+                  summary: Invalid input data
+                  value:
+                    data: null
+                    meta:
+                      error: "Invalid input data"
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Product not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Internal server error"
+
+  /orders/{id}:
+    get:
+      tags:
+        - orders
+      summary: Get order by ID
+      description: |
+        Retrieve a single order by its unique identifier with enriched product information.
+        
+        The response includes current product details fetched from the Product Service,
+        which may differ from the product state at the time of order creation.
+      operationId: getOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Order unique identifier (UUID v7)
+          schema:
+            type: string
+            format: uuid
+            example: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+      responses:
+        '200':
+          description: Order found and returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+              example:
+                data:
+                  orderId: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+                  product:
+                    id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                    name: "Wireless Headphones"
+                    price: 99.99
+                    quantity: 8
+                  customerName: "John Doe"
+                  quantityOrdered: 2
+                  orderStatus: "Processing"
+                meta: []
+        '400':
+          description: Bad request - invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Invalid order ID format"
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Order not found"
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: |
+        Check if the service is running and healthy.
+        
+        Used by load balancers and monitoring systems to verify service availability.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "ok"
+                service: "order-service"
+
+components:
+  schemas:
+    Order:
+      type: object
+      required:
+        - orderId
+        - product
+        - customerName
+        - quantityOrdered
+        - orderStatus
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Unique order identifier (UUID v7)
+          example: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+        product:
+          $ref: '#/components/schemas/ProductInfo'
+        customerName:
+          type: string
+          description: Name of the customer who placed the order
+          example: "John Doe"
+          maxLength: 255
+        quantityOrdered:
+          type: integer
+          description: Quantity of the product ordered
+          example: 2
+          minimum: 1
+        orderStatus:
+          type: string
+          description: Current status of the order
+          example: "Processing"
+          enum: ["Processing", "Completed", "Cancelled"]
+
+    ProductInfo:
+      type: object
+      required:
+        - id
+        - name
+        - price
+        - quantity
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Product unique identifier (UUID v7)
+          example: "019abba0-fffb-780c-9b4f-9c4934250a44"
+        name:
+          type: string
+          description: Product name
+          example: "Wireless Headphones"
+        price:
+          type: number
+          format: float
+          description: Current product price in dollars
+          example: 99.99
+          minimum: 0
+        quantity:
+          type: integer
+          description: Current available quantity in stock
+          example: 8
+          minimum: 0
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - productId
+            - customerName
+            - quantityOrdered
+          properties:
+            orderId:
+              type: string
+              format: uuid
+              description: Optional custom order ID (UUID v7). If not provided, one will be generated.
+              example: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+            productId:
+              type: string
+              format: uuid
+              description: ID of the product to order (UUID v7)
+              example: "019abba0-fffb-780c-9b4f-9c4934250a44"
+            customerName:
+              type: string
+              description: Name of the customer placing the order
+              example: "John Doe"
+              maxLength: 255
+              minLength: 1
+            quantityOrdered:
+              type: integer
+              description: Quantity of the product to order
+              example: 2
+              minimum: 1
+
+    OrderResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/Order'
+            - type: "null"
+        meta:
+          type: object
+          description: Response metadata
+          properties:
+            error:
+              type: string
+              description: Error message if applicable
+          example: []
+
+    OrderListResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+          description: Array of orders with enriched product information
+        meta:
+          type: object
+          required:
+            - page
+            - limit
+            - total
+            - pages
+          properties:
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+              minimum: 1
+            limit:
+              type: integer
+              description: Items per page
+              example: 10
+              minimum: 1
+              maximum: 100
+            total:
+              type: integer
+              description: Total number of orders
+              example: 42
+              minimum: 0
+            pages:
+              type: integer
+              description: Total number of pages
+              example: 5
+              minimum: 1
+
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: "null"
+          description: Always null for error responses
+        meta:
+          type: object
+          required:
+            - error
+          properties:
+            error:
+              type: string
+              description: Error message describing what went wrong
+              example: "Order not found"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          enum: ["ok", "error"]
+          description: Service health status
+          example: "ok"
+        service:
+          type: string
+          description: Service identifier
+          example: "order-service"
+
+  examples:
+    OrderExample:
+      summary: Example order with product information
+      value:
+        orderId: "019abbf9-dec0-785e-af09-216a4f84d0bd"
+        product:
+          id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+          name: "Wireless Headphones"
+          price: 99.99
+          quantity: 8
+        customerName: "John Doe"
+        quantityOrdered: 2
+        orderStatus: "Processing"
+
+    CreateOrderExample:
+      summary: Example order creation request
+      value:
+        data:
+          productId: "019abba0-fffb-780c-9b4f-9c4934250a44"
+          customerName: "John Doe"
+          quantityOrdered: 2
+
+# Additional metadata for API documentation
+x-api-features:
+  - Clean Architecture implementation with Domain-Driven Design
+  - Product Service integration for validation and stock management
+  - PostgreSQL persistence with proper transaction handling
+  - UUID v7 identifiers for better performance and ordering
+  - Comprehensive error handling with detailed messages
+  - Pagination support for large datasets
+  - Health monitoring endpoint
+
+x-service-dependencies:
+  ProductService:
+    description: External service for product validation and stock management
+    base_url: "http://product-service"
+    endpoints:
+      - GET /product/{id} - Fetch product details
+      - PATCH /product/{id}/quantity - Update product stock (planned)
+    integration_pattern: "HTTP Client with circuit breaker pattern"
+
+x-business-rules:
+  - Orders can only be created for existing products
+  - Product stock is validated before order creation
+  - Product quantity is decremented upon successful order creation
+  - Orders are created with "Processing" status by default
+  - Order IDs are UUID v7 for better database performance
+  - Customer names are required and cannot be empty

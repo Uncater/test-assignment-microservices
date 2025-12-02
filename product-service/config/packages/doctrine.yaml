@@ -1,0 +1,30 @@
+doctrine:
+  dbal:
+    driver: '%env(DB_DRIVER)%'
+    host: '%env(DB_HOST)%'
+    port: '%env(int:DB_PORT)%'
+    dbname: '%env(DB_NAME)%'
+    user: '%env(DB_USER)%'
+    password: '%env(DB_PASSWORD)%'
+    server_version: '%env(DB_SERVER_VERSION)%'
+    charset: '%env(DB_CHARSET)%'
+
+  orm:
+    enable_native_lazy_objects: true
+    default_entity_manager: default
+    entity_managers:
+      default:
+        naming_strategy: doctrine.orm.naming_strategy.underscore_number_aware
+        auto_mapping: true
+        mappings:
+          App:
+            type: attribute
+            is_bundle: false
+            dir: '%kernel.project_dir%/src/Product/Domain/Product/Entity'
+            prefix: 'App\Product\Domain\Product\Entity'
+            alias: App
+          OrderBundle:
+            is_bundle: false
+            dir: '%kernel.project_dir%/order-bundle/src/Entity'
+            prefix: 'OrderBundle\Entity'
+            alias: OrderBundle

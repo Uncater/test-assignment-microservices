@@ -1,0 +1,26 @@
+framework:
+    messenger:
+        # failure_transport: failed
+
+        transports:
+            sync: 'sync://'
+            product_events:
+                dsn: '%env(RABBITMQ_URL)%'
+                options:
+                    exchange:
+                        name: 'product.events'
+                        type: 'topic'
+            order_events:
+                dsn: '%env(RABBITMQ_URL)%'
+                options:
+                    exchange:
+                        name: 'product.events'
+                        type: 'topic'
+                    queues:
+                        messages:
+                            binding_keys: ['product.quantity.decreased']
+
+        routing:
+            'OrderBundle\Messaging\Product\Event\ProductCreatedMessage': product_events
+            'OrderBundle\Messaging\Product\Event\ProductUpdatedMessage': product_events
+            'OrderBundle\Messaging\Product\Event\ProductQuantityDecreasedEvent': order_events

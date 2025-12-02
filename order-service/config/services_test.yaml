@@ -1,0 +1,5 @@
+imports:
+    - { resource: '../order-bundle/config/services_test.php' }
+
+services:
+    # Test-specific services can be defined here

@@ -1,0 +1,14 @@
+framework:
+    messenger:
+        transports:
+            product_events:
+                dsn: 'amqp://admin:pass@rabbitmq:5672/%2f'
+                options:
+                    exchange:
+                        name: product.events
+                        type: topic
+            sync: 'sync://'
+
+        routing:
+            'OrderBundle\Messaging\Product\Event\ProductQuantityDecreasedEvent':
+                senders: ['product_events']

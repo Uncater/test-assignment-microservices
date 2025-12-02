@@ -1,0 +1,59 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+    product_service_url: '%env(PRODUCT_SERVICE_URL)%'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # Order domain services
+    App\Order\Domain\:
+        resource: '../src/Order/Domain/'
+
+    # Order infrastructure services
+    App\Order\Infrastructure\:
+        resource: '../src/Order/Infrastructure/'
+
+    # Order presentation services
+    App\Order\Presentation\:
+        resource: '../src/Order/Presentation/'
+
+    # Product domain services
+    App\Product\Domain\:
+        resource: '../src/Product/Domain/'
+
+    # Product infrastructure services
+    App\Product\Infrastructure\:
+        resource: '../src/Product/Infrastructure/'
+
+    # controllers are imported separately to make sure services can be injected
+    # as action arguments even if you don't extend any base controller class
+    App\Order\Infrastructure\Controller\:
+        resource: '../src/Order/Infrastructure/Controller/'
+        tags: ['controller.service_arguments']
+
+    # Repository interface binding
+    App\Order\Domain\Order\Repository\OrderRepositoryInterface:
+        alias: App\Order\Infrastructure\Repository\OrderRepository
+
+    # Product service interface binding
+    App\Product\Domain\Product\Service\ProductServiceInterface:
+        alias: App\Product\Domain\Product\Service\ProductService
+
+    # Product service client interface binding
+    App\Product\Infrastructure\Client\ProductServiceClientInterface:
+        alias: App\Product\Infrastructure\Client\ProductServiceClient
+
+    # Product service client configuration
+    App\Product\Infrastructure\Client\ProductServiceClient:
+        arguments:
+            $productServiceUrl: '%product_service_url%'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones

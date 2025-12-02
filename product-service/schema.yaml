@@ -1,0 +1,428 @@
+openapi: 3.0.3
+info:
+  title: Product Service API
+  description: |
+    Microservice for managing products in a distributed e-commerce system.
+    
+    This service provides CRUD operations for products and integrates with RabbitMQ 
+    for event-driven communication with other services.
+    
+    ## Architecture
+    - Built with Symfony 6.4 and Clean Architecture principles
+    - Uses PostgreSQL for data persistence
+    - Publishes events via RabbitMQ for inter-service communication
+    - Implements Domain-Driven Design patterns
+    
+  version: 1.0.0
+  contact:
+    name: Product Service Team
+    email: product-team@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com/product-service
+    description: Production server
+
+tags:
+  - name: products
+    description: Product management operations
+  - name: health
+    description: Service health monitoring
+
+paths:
+  /products:
+    get:
+      tags:
+        - products
+      summary: List products
+      description: |
+        Retrieve a paginated list of all products.
+        
+        Supports pagination parameters to control the number of results returned.
+      operationId: listProducts
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-based)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Successful response with paginated product list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+              examples:
+                empty_list:
+                  summary: Empty product list
+                  value:
+                    data: []
+                    meta:
+                      page: 1
+                      limit: 10
+                      total: 0
+                      pages: 1
+                with_products:
+                  summary: List with products
+                  value:
+                    data:
+                      - id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                        name: "Wireless Headphones"
+                        price: 99.99
+                        quantity: 50
+                      - id: "019abba1-3d42-711d-b1ff-f137a40e0540"
+                        name: "Bluetooth Speaker"
+                        price: 79.99
+                        quantity: 25
+                    meta:
+                      page: 1
+                      limit: 10
+                      total: 2
+                      pages: 1
+        '400':
+          description: Bad request - invalid pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Invalid pagination parameters"
+
+  /product:
+    post:
+      tags:
+        - products
+      summary: Create product
+      description: |
+        Create a new product in the system.
+        
+        When a product is successfully created, a `ProductCreatedMessage` event 
+        is published to RabbitMQ for other services to consume.
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+            examples:
+              valid_product:
+                summary: Valid product creation
+                value:
+                  name: "Gaming Laptop"
+                  price: 1299.99
+                  quantity: 10
+              minimal_product:
+                summary: Minimal product (edge case)
+                value:
+                  name: ""
+                  price: 0
+                  quantity: 0
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+              example:
+                data:
+                  id: "019abbde-3e67-767f-b7fd-9ccdbf993681"
+                  name: "Gaming Laptop"
+                  price: 1299.99
+                  quantity: 10
+                meta: []
+        '400':
+          description: Bad request - invalid product data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Invalid product data"
+
+  /product/{id}:
+    get:
+      tags:
+        - products
+      summary: Get product by ID
+      description: |
+        Retrieve a single product by its unique identifier.
+        
+        The ID must be a valid UUID v7 format.
+      operationId: getProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product unique identifier (UUID v7)
+          schema:
+            type: string
+            format: uuid
+            example: "019abba0-fffb-780c-9b4f-9c4934250a44"
+      responses:
+        '200':
+          description: Product found and returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+              example:
+                data:
+                  id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+                  name: "Wireless Headphones"
+                  price: 99.99
+                  quantity: 50
+                meta: []
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Not found"
+        '500':
+          description: Internal server error - invalid UUID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                meta:
+                  error: "Invalid UUID format"
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: |
+        Check if the service is running and healthy.
+        
+        Used by load balancers and monitoring systems to verify service availability.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "ok"
+                service: "product-service"
+
+components:
+  schemas:
+    Product:
+      type: object
+      required:
+        - id
+        - name
+        - price
+        - quantity
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique product identifier (UUID v7)
+          example: "019abba0-fffb-780c-9b4f-9c4934250a44"
+        name:
+          type: string
+          description: Product name
+          example: "Wireless Headphones"
+          maxLength: 255
+        price:
+          type: number
+          format: float
+          description: Product price in dollars
+          example: 99.99
+          minimum: 0
+        quantity:
+          type: integer
+          description: Available quantity in stock
+          example: 50
+          minimum: 0
+
+    CreateProductRequest:
+      type: object
+      required:
+        - name
+        - price
+        - quantity
+      properties:
+        name:
+          type: string
+          description: Product name
+          example: "Gaming Laptop"
+          maxLength: 255
+        price:
+          type: number
+          format: float
+          description: Product price in dollars
+          example: 1299.99
+          minimum: 0
+        quantity:
+          type: integer
+          description: Initial quantity in stock
+          example: 10
+          minimum: 0
+
+    ProductResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/Product'
+            - type: "null"
+        meta:
+          type: object
+          description: Response metadata
+          properties:
+            error:
+              type: string
+              description: Error message if applicable
+          example: []
+
+    ProductListResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+          description: Array of products
+        meta:
+          type: object
+          required:
+            - page
+            - limit
+            - total
+            - pages
+          properties:
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+              minimum: 1
+            limit:
+              type: integer
+              description: Items per page
+              example: 10
+              minimum: 1
+              maximum: 100
+            total:
+              type: integer
+              description: Total number of products
+              example: 42
+              minimum: 0
+            pages:
+              type: integer
+              description: Total number of pages
+              example: 5
+              minimum: 1
+
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: "null"
+          description: Always null for error responses
+        meta:
+          type: object
+          required:
+            - error
+          properties:
+            error:
+              type: string
+              description: Error message describing what went wrong
+              example: "Not found"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          enum: ["ok", "error"]
+          description: Service health status
+          example: "ok"
+        service:
+          type: string
+          description: Service identifier
+          example: "product-service"
+
+  examples:
+    ProductExample:
+      summary: Example product
+      value:
+        id: "019abba0-fffb-780c-9b4f-9c4934250a44"
+        name: "Wireless Headphones"
+        price: 99.99
+        quantity: 50
+
+    CreateProductExample:
+      summary: Example product creation request
+      value:
+        name: "Gaming Laptop"
+        price: 1299.99
+        quantity: 10
+
+# Additional metadata for API documentation
+x-api-features:
+  - Clean Architecture implementation
+  - Event-driven messaging with RabbitMQ
+  - PostgreSQL persistence
+  - UUID v7 identifiers
+  - Comprehensive error handling
+  - Pagination support
+  - Health monitoring
+
+x-message-events:
+  ProductCreatedMessage:
+    description: Published when a new product is created
+    routing_key: "product.created"
+    exchange: "product.events"
+    payload:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/Product'

@@ -1,0 +1,5 @@
+#!/usr/bin/env php
+<?php
+
+// Simple script to run unit tests only
+passthru('./bin/phpunit --configuration phpunit.unit.xml ' . implode(' ', array_slice($argv, 1)));
